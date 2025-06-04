@@ -1,16 +1,14 @@
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
-from db import users  # שימוש במשתנה מ-db.py
+from db import users  # שימוש בקולקציה מתוך db.py
 from pymongo.errors import PyMongoError
 
 router = APIRouter()
-
 
 # מודל התחברות
 class LoginRequest(BaseModel):
     userName: str
     password: str
-
 
 # נקודת קצה לבדוק התחברות
 @router.post("/login")
@@ -30,8 +28,12 @@ def login_user(data: LoginRequest):
         raise HTTPException(status_code=401, detail="שם משתמש או סיסמה שגויים")
 
     role = user.get("role", "mentee")  # ברירת מחדל
+    full_name = user.get("fullName", "")
+
     return {
         "message": "התחברות הצליחה!",
+        "userId": str(user["_id"]),  #
+        "name": full_name,
         "role": role,
         "redirectTo": f"/dashboard/{role}"
     }
