@@ -7,3 +7,4 @@ PyMuPDF
 python-docx
 scikit-learn
 requests
+python-multipart
