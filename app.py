@@ -1,6 +1,12 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from routes import auth  # נניח שזה הקובץ ששלחת לי קודם
+from routes import handleDashboardMentees
+from routes import mentorSwipe
+from routes import createMentor
+from routes import adminMentorPage
+from routes import meetingsPage
+from routes import traineesPage
 
 app = FastAPI()
 
@@ -15,6 +21,12 @@ app.add_middleware(
 
 # רישום הנתיב של auth
 app.include_router(auth.router)
+app.include_router(mentorSwipe.router)
+app.include_router(handleDashboardMentees.router)
+
+app.include_router(adminMentorPage.router)
+app.include_router(meetingsPage.router)
+app.include_router(traineesPage.router)
 
 # נקודת התחלה לבדיקת תקינות
 @app.get("/")
