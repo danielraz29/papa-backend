@@ -2,7 +2,6 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from db import users
 from pymongo.errors import PyMongoError
-import bcrypt
 
 router = APIRouter()
 
@@ -23,13 +22,12 @@ def login_user(data: LoginRequest):
     if not user:
         raise HTTPException(status_code=401, detail="שם משתמש או סיסמה שגויים")
 
-    # בדיקת מצב חשבון
+    # בדיקת סטטוס משתמש
     if user.get("status") != "active":
         raise HTTPException(status_code=403, detail="החשבון לא פעיל או ממתין לאישור. אנא פנה לצוות ההנהלה.")
 
-    # השוואת סיסמה מוצפנת
-    hashed_password = user.get("password")
-    if not hashed_password or not bcrypt.checkpw(data.password.encode("utf-8"), hashed_password.encode("utf-8")):
+    # השוואת סיסמה רגילה (לא מוצפנת)
+    if user.get("password") != data.password:
         raise HTTPException(status_code=401, detail="שם משתמש או סיסמה שגויים")
 
     role = user.get("role", "mentee")
