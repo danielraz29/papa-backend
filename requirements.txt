@@ -3,9 +3,10 @@ uvicorn
 pydantic
 pymongo
 python-dotenv
-PyMuPDF
+pymupdf
 python-docx
 scikit-learn
 requests
 python-multipart
 pandas
+bcrypt
