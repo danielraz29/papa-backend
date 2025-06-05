@@ -30,7 +30,7 @@ def login_user(data: LoginRequest):
     if user.get("password") != data.password:
         raise HTTPException(status_code=401, detail="שם משתמש או סיסמה שגויים")
 
-    role = user.get("role", "mentee","mentor")
+    role = user.get("role", "mentee")
     full_name = user.get("fullName", "")
 
     return {
