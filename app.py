@@ -7,6 +7,7 @@ from routes import createMentor
 from routes import adminMentorPage
 from routes import meetingsPage
 from routes import traineesPage
+from routes import mentor_dashboard
 
 app = FastAPI()
 
@@ -27,6 +28,7 @@ app.include_router(handleDashboardMentees.router)
 app.include_router(adminMentorPage.router)
 app.include_router(meetingsPage.router)
 app.include_router(traineesPage.router)
+app.include_router(mentor_dashboard.router)
 
 # נקודת התחלה לבדיקת תקינות
 @app.get("/")
