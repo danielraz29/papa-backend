@@ -24,6 +24,7 @@ app.add_middleware(
 app.include_router(auth.router)
 app.include_router(mentorSwipe.router)
 app.include_router(handleDashboardMentees.router)
+app.include_router(createMentor.router)
 
 app.include_router(adminMentorPage.router)
 app.include_router(meetingsPage.router)
