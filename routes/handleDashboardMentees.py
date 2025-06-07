@@ -1,13 +1,16 @@
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from typing import List, Optional
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 from bson import ObjectId
 from pymongo.errors import PyMongoError
 
 from db import users, requests, meetings  # שימוש בקולקציות מתוך db.py
 
 router = APIRouter()
+
+# Define Israel timezone offset manually (UTC+3 for summer time)
+ISRAEL_TZ = timezone(timedelta(hours=3))
 
 class Meeting(BaseModel):
     mentorId: str
@@ -44,7 +47,6 @@ def add_meeting(meeting: Meeting):
         if not ObjectId.is_valid(meeting.menteeId) or not ObjectId.is_valid(meeting.mentorId):
             raise HTTPException(status_code=400, detail="Mentee ID או Mentor ID לא תקינים")
 
-        # אימות שהחונך נמצא ברשימת השיבוצים הפעילים
         matched = requests.find_one({
             "menteeId": ObjectId(meeting.menteeId),
             "mentorId": ObjectId(meeting.mentorId),
@@ -57,6 +59,11 @@ def add_meeting(meeting: Meeting):
         meeting_dict["menteeId"] = ObjectId(meeting_dict["menteeId"])
         meeting_dict["mentorId"] = ObjectId(meeting_dict["mentorId"])
         meeting_dict["matchId"] = matched["_id"]
+
+        # Convert to UTC assuming input is local (Israel time)
+        meeting_dict["startDateTime"] = meeting.startDateTime.astimezone(ISRAEL_TZ).astimezone(timezone.utc)
+        meeting_dict["endDateTime"] = meeting.endDateTime.astimezone(ISRAEL_TZ).astimezone(timezone.utc)
+
         meeting_dict["createdAt"] = datetime.utcnow()
         meeting_dict["updatedAt"] = datetime.utcnow()
         meeting_dict["description"] = None
@@ -71,7 +78,6 @@ def add_meeting(meeting: Meeting):
         return saved
     except PyMongoError as e:
         raise HTTPException(status_code=500, detail=str(e))
-
 
 @router.delete("/api/meetings/{meeting_id}")
 def delete_meeting(meeting_id: str):
@@ -97,8 +103,7 @@ def get_assignments(menteeId: str, status: str = "in progress"):
             a["_id"] = str(a["_id"])
             a["menteeId"] = str(a["menteeId"])
             a["mentorId"] = str(a["mentorId"])
-            # נוסיף את שם החונך אם נמצא ב-db.users
-            mentor = users.find_one({"_id": ObjectId(a["mentorId"])})
+            mentor = users.find_one({"_id": ObjectId(a["mentorId"])});
             a["mentorName"] = mentor["fullName"] if mentor else "לא ידוע"
         return result
     except PyMongoError as e:
