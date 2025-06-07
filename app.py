@@ -1,6 +1,8 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from routes import auth  # נניח שזה הקובץ ששלחת לי קודם
+from fastapi.staticfiles import StaticFiles
+
+from routes import auth
 from routes import handleDashboardMentees
 from routes import mentorSwipe
 from routes import createMentor
@@ -12,16 +14,19 @@ from routes import createMentee
 
 app = FastAPI()
 
-# הגדרות CORS כדי לאפשר קריאה מה-React
+# הגדרת Static Files עבור קבצי PDF של קורות חיים
+app.mount("/temp_uploads", StaticFiles(directory="temp_uploads"), name="temp_uploads")
+
+# הגדרות CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # אפשר לשים דומיין ספציפי כאן למשל "http://localhost:3000"
+    allow_origins=["*"],  # מומלץ להחליף לדומיין מדויק בפרודקשן
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# רישום הנתיב של auth
+# רישום הנתיבים
 app.include_router(auth.router)
 app.include_router(mentorSwipe.router)
 app.include_router(handleDashboardMentees.router)
@@ -32,7 +37,7 @@ app.include_router(meetingsPage.router)
 app.include_router(traineesPage.router)
 app.include_router(mentor_dashboard.router)
 
-# נקודת התחלה לבדיקת תקינות
+# בדיקת תקינות ראשונית
 @app.get("/")
 def read_root():
     return {"message": "ברוך הבא למערכת פאפא (PAPA system)!"}
