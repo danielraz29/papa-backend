@@ -61,8 +61,9 @@ def add_meeting(meeting: Meeting):
         meeting_dict["matchId"] = matched["_id"]
 
         # Convert to UTC assuming input is local (Israel time)
-        meeting_dict["startDateTime"] = meeting.startDateTime.astimezone(ISRAEL_TZ).astimezone(timezone.utc)
-        meeting_dict["endDateTime"] = meeting.endDateTime.astimezone(ISRAEL_TZ).astimezone(timezone.utc)
+       meeting_dict["startDateTime"] = meeting.startDateTime
+meeting_dict["endDateTime"] = meeting.endDateTime
+
 
         meeting_dict["createdAt"] = datetime.utcnow()
         meeting_dict["updatedAt"] = datetime.utcnow()
