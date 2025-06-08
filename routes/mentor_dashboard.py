@@ -5,14 +5,16 @@ from db import meetings, requests, users
 
 router = APIRouter()
 
-@router.get("/mentor-meetings")
-def get_meetings_by_mentor(userName: str):
-    mentor = users.find_one({"userName": userName})
+@router.get("/api/mentor-meetings")
+def get_meetings_by_mentor(userId: str):
+    if not ObjectId.is_valid(userId):
+        raise HTTPException(status_code=400, detail="Invalid userId")
+
+    mentor = users.find_one({"_id": ObjectId(userId)})
     if not mentor:
         raise HTTPException(status_code=404, detail="Mentor not found")
 
-    mentor_id = mentor["_id"]
-    result = list(meetings.find({"mentorId": mentor_id}))
+    result = list(meetings.find({"mentorId": mentor["_id"]}))
     for m in result:
         m["_id"] = str(m["_id"])
         m["mentorId"] = str(m["mentorId"])
@@ -21,14 +23,17 @@ def get_meetings_by_mentor(userName: str):
             m["matchId"] = str(m["matchId"])
     return result
 
-@router.get("/mentor-assigned")
-def get_mentees_by_mentor(userName: str):
-    mentor = users.find_one({"userName": userName})
+
+@router.get("/api/mentor-assigned")
+def get_mentees_by_mentor(userId: str):
+    if not ObjectId.is_valid(userId):
+        raise HTTPException(status_code=400, detail="Invalid userId")
+
+    mentor = users.find_one({"_id": ObjectId(userId)})
     if not mentor:
         raise HTTPException(status_code=404, detail="Mentor not found")
 
-    mentor_id = mentor["_id"]
-    result = list(requests.find({"mentorId": mentor_id}))
+    result = list(requests.find({"mentorId": mentor["_id"]}))
     enriched = []
 
     for r in result:
@@ -46,7 +51,8 @@ def get_mentees_by_mentor(userName: str):
 
     return enriched
 
-@router.post("/meetings")
+
+@router.post("/api/meetings")
 def create_meeting(meeting: dict):
     required_fields = ["mentorId", "menteeId", "summary", "startDateTime", "endDateTime"]
     if not all(field in meeting for field in required_fields):
@@ -58,11 +64,10 @@ def create_meeting(meeting: dict):
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid date format")
 
-    mentor = users.find_one({"userName": meeting["mentorId"]})
-    if not mentor:
-        raise HTTPException(status_code=404, detail="Mentor not found")
-    meeting["mentorId"] = mentor["_id"]
+    if not ObjectId.is_valid(meeting["mentorId"]) or not ObjectId.is_valid(meeting["menteeId"]):
+        raise HTTPException(status_code=400, detail="Invalid ObjectId")
 
+    meeting["mentorId"] = ObjectId(meeting["mentorId"])
     meeting["menteeId"] = ObjectId(meeting["menteeId"])
 
     result = meetings.insert_one(meeting)
@@ -71,15 +76,22 @@ def create_meeting(meeting: dict):
     meeting["menteeId"] = str(meeting["menteeId"])
     return meeting
 
-@router.get("/mentor-name")
-def get_mentor_name(userName: str):
-    mentor = users.find_one({"userName": userName})
+
+@router.get("/api/mentor-name")
+def get_mentor_name(userId: str):
+    if not ObjectId.is_valid(userId):
+        raise HTTPException(status_code=400, detail="Invalid userId")
+    mentor = users.find_one({"_id": ObjectId(userId)})
     if not mentor:
         raise HTTPException(status_code=404, detail="Mentor not found")
     return {"fullName": mentor.get("fullName", "")}
 
-@router.delete("/meetings/{meeting_id}")
+
+@router.delete("/api/meetings/{meeting_id}")
 def delete_meeting(meeting_id: str):
+    if not ObjectId.is_valid(meeting_id):
+        raise HTTPException(status_code=400, detail="Invalid meeting ID")
+
     result = meetings.delete_one({"_id": ObjectId(meeting_id)})
     if result.deleted_count == 1:
         return {"message": "Deleted"}
