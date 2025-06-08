@@ -97,19 +97,29 @@ def export_meetings_by_mentor(payload: Dict):
     if not mentor:
         raise HTTPException(status_code=404, detail="Mentor not found")
 
-    mentor_id = mentor["_id"]
-    full_name = mentor.get("fullName", "")
+    mentor_id = mentor["_id"]  # סוג ObjectId
 
+    # חיפוש מפגשים עם mentorId תואם
     results = list(meetings.find({"mentorId": mentor_id}))
+
     if not results:
         raise HTTPException(status_code=404, detail="No meetings found")
 
     data = []
     for m in results:
-        mentee = users.find_one({"_id": m["menteeId"]})
+        mentee_id = m.get("menteeId")
+        if isinstance(mentee_id, str):
+            try:
+                mentee_id = ObjectId(mentee_id)
+            except Exception:
+                mentee_id = None
+
+        mentee = users.find_one({"_id": mentee_id}) if mentee_id else None
+
         data.append({
             "נושא": m.get("summary", ""),
-            "שם חונך": full_name,
+            "תיאור": m.get("description", ""),
+            "שם חונך": mentor.get("fullName", ""),
             "שם חניך": mentee.get("fullName", "") if mentee else "לא נמצא",
             "תאריך התחלה": m.get("startDateTime"),
             "תאריך סיום": m.get("endDateTime"),
@@ -120,7 +130,7 @@ def export_meetings_by_mentor(payload: Dict):
     df = pd.DataFrame(data)
     df.to_excel(filename, index=False)
 
-    print(f"✅ הקובץ נוצר בהצלחה: {filename}")
+    print(f"✅ נוצר קובץ ייצוא: {filename}")
     return FileResponse(
         path=filename,
         filename=filename,
