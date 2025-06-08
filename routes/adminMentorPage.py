@@ -3,18 +3,20 @@ from db import users, meetings
 from typing import Dict
 import random
 import string
-from utils.email_util import send_email  # נשלח בהמשך
+from utils.email_util import send_email
 from bson import ObjectId
-from io import BytesIO
-from fastapi.responses import StreamingResponse
+from fastapi.responses import FileResponse
 import pandas as pd
+import os
 
 router = APIRouter()
+
 
 def generate_password():
     letters = ''.join(random.choices(string.ascii_uppercase, k=4))
     digits = ''.join(random.choices(string.digits, k=4))
     return letters + digits
+
 
 @router.get("/api/mentors")
 def get_mentors():
@@ -32,6 +34,7 @@ def get_mentors():
         mentor.setdefault("cvUrl", "")
         mentor.setdefault("status", "")
     return mentors
+
 
 @router.post("/api/update-status")
 def update_status(payload: Dict):
@@ -60,7 +63,6 @@ def update_status(payload: Dict):
     if result.matched_count == 0:
         raise HTTPException(status_code=404, detail="משתמש לא נמצא")
 
-    # שליחת מייל אם הסטטוס הוא פעיל
     if new_status == "active":
         mentor = users.find_one({"userName": user_name})
         if mentor and mentor.get("gmail"):
@@ -83,6 +85,7 @@ def update_status(payload: Dict):
                 print("❌ שגיאה בשליחת מייל:", str(e))
 
     return {"message": "הסטטוס עודכן בהצלחה"}
+
 
 @router.post("/api/meetings-by-mentor")
 def export_meetings_by_mentor(payload: Dict):
@@ -113,14 +116,13 @@ def export_meetings_by_mentor(payload: Dict):
             "סטטוס": m.get("status", "לא ידוע")
         })
 
+    filename = f"meetings_{user_name}.xlsx"
     df = pd.DataFrame(data)
-    output = BytesIO()
-    with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
-        df.to_excel(writer, index=False, sheet_name="מפגשים")
-    output.seek(0)
+    df.to_excel(filename, index=False)
 
-    return StreamingResponse(
-        output,
-        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        headers={"Content-Disposition": f"attachment; filename=meetings_{user_name}.xlsx"}
+    print(f"✅ הקובץ נוצר בהצלחה: {filename}")
+    return FileResponse(
+        path=filename,
+        filename=filename,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
