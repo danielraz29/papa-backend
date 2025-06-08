@@ -11,12 +11,10 @@ import os
 
 router = APIRouter()
 
-
 def generate_password():
     letters = ''.join(random.choices(string.ascii_uppercase, k=4))
     digits = ''.join(random.choices(string.digits, k=4))
     return letters + digits
-
 
 @router.get("/api/mentors")
 def get_mentors():
@@ -34,7 +32,6 @@ def get_mentors():
         mentor.setdefault("cvUrl", "")
         mentor.setdefault("status", "")
     return mentors
-
 
 @router.post("/api/update-status")
 def update_status(payload: Dict):
@@ -86,51 +83,44 @@ def update_status(payload: Dict):
 
     return {"message": "הסטטוס עודכן בהצלחה"}
 
-
 @router.post("/api/meetings-by-mentor")
 def export_meetings_by_mentor(payload: Dict):
-    user_name = payload.get("userName")
-    if not user_name:
-        raise HTTPException(status_code=400, detail="userName is required")
+    mentor_id_raw = payload.get("mentorId")
+    if not mentor_id_raw:
+        raise HTTPException(status_code=400, detail="mentorId is required")
 
-    mentor = users.find_one({"userName": user_name})
+    try:
+        mentor_id = ObjectId(mentor_id_raw)
+    except Exception:
+        raise HTTPException(status_code=400, detail="mentorId לא תקני")
+
+    mentor = users.find_one({"_id": mentor_id})
     if not mentor:
         raise HTTPException(status_code=404, detail="Mentor not found")
 
-    mentor_id = mentor["_id"]  # סוג ObjectId
-
-    # חיפוש מפגשים עם mentorId תואם
+    full_name = mentor.get("fullName", "")
     results = list(meetings.find({"mentorId": mentor_id}))
-
     if not results:
         raise HTTPException(status_code=404, detail="No meetings found")
 
     data = []
     for m in results:
-        mentee_id = m.get("menteeId")
-        if isinstance(mentee_id, str):
-            try:
-                mentee_id = ObjectId(mentee_id)
-            except Exception:
-                mentee_id = None
-
-        mentee = users.find_one({"_id": mentee_id}) if mentee_id else None
-
+        mentee = users.find_one({"_id": m.get("menteeId")})
         data.append({
             "נושא": m.get("summary", ""),
             "תיאור": m.get("description", ""),
-            "שם חונך": mentor.get("fullName", ""),
+            "שם חונך": full_name,
             "שם חניך": mentee.get("fullName", "") if mentee else "לא נמצא",
             "תאריך התחלה": m.get("startDateTime"),
             "תאריך סיום": m.get("endDateTime"),
             "סטטוס": m.get("status", "לא ידוע")
         })
 
-    filename = f"meetings_{user_name}.xlsx"
+    filename = f"meetings_{mentor_id}.xlsx"
     df = pd.DataFrame(data)
     df.to_excel(filename, index=False)
 
-    print(f"✅ נוצר קובץ ייצוא: {filename}")
+    print(f"✅ הקובץ נוצר בהצלחה: {filename}")
     return FileResponse(
         path=filename,
         filename=filename,
