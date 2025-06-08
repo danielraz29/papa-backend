@@ -83,46 +83,47 @@ def update_status(payload: Dict):
 
     return {"message": "הסטטוס עודכן בהצלחה"}
 
-@router.post("/api/meetings-by-mentor")
-def export_meetings_by_mentor(payload: Dict):
-    mentor_id_raw = payload.get("mentorId")
-    if not mentor_id_raw:
-        raise HTTPException(status_code=400, detail="mentorId is required")
-
+@router.get("/api/export-meetings/{mentor_id}")
+def export_meetings(mentor_id: str):
     try:
-        mentor_id = ObjectId(mentor_id_raw)
-    except Exception:
-        raise HTTPException(status_code=400, detail="mentorId לא תקני")
+        print(f"📦 בקשת ייצוא עבור mentorId: {mentor_id}")
+        mentor_obj_id = ObjectId(mentor_id)
+        mentor = users.find_one({"_id": mentor_obj_id})
 
-    mentor = users.find_one({"_id": mentor_id})
-    if not mentor:
-        raise HTTPException(status_code=404, detail="Mentor not found")
+        if not mentor:
+            raise HTTPException(status_code=404, detail="חונך לא נמצא")
 
-    full_name = mentor.get("fullName", "")
-    results = list(meetings.find({"mentorId": mentor_id}))
-    if not results:
-        raise HTTPException(status_code=404, detail="No meetings found")
+        full_name = mentor.get("fullName", "")
+        meetings_list = list(meetings.find({"mentorId": mentor_obj_id}))
 
-    data = []
-    for m in results:
-        mentee = users.find_one({"_id": m.get("menteeId")})
-        data.append({
-            "נושא": m.get("summary", ""),
-            "תיאור": m.get("description", ""),
-            "שם חונך": full_name,
-            "שם חניך": mentee.get("fullName", "") if mentee else "לא נמצא",
-            "תאריך התחלה": m.get("startDateTime"),
-            "תאריך סיום": m.get("endDateTime"),
-            "סטטוס": m.get("status", "לא ידוע")
-        })
+        if not meetings_list:
+            raise HTTPException(status_code=404, detail="לא נמצאו מפגשים לחונך זה")
 
-    filename = f"meetings_{mentor_id}.xlsx"
-    df = pd.DataFrame(data)
-    df.to_excel(filename, index=False)
+        data = []
+        for m in meetings_list:
+            mentee = users.find_one({"_id": m["menteeId"]})
+            data.append({
+                "נושא": m.get("summary", ""),
+                "תיאור": m.get("description", ""),
+                "שם חונך": full_name,
+                "שם חניך": mentee.get("fullName", "") if mentee else "לא ידוע",
+                "תאריך התחלה": m.get("startDateTime"),
+                "תאריך סיום": m.get("endDateTime"),
+                "סטטוס": m.get("status", "")
+            })
 
-    print(f"✅ הקובץ נוצר בהצלחה: {filename}")
-    return FileResponse(
-        path=filename,
-        filename=filename,
-        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-    )
+        df = pd.DataFrame(data)
+        filename = f"meetings_{mentor_id}.xlsx"
+        df.to_excel(filename, index=False)
+
+        print(f"✅ הקובץ נוצר: {filename}")
+        return FileResponse(
+            path=filename,
+            filename=filename,
+            media_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        )
+
+    except Exception as e:
+        print(f"❌ שגיאה: {str(e)}")
+        raise HTTPException(status_code=500, detail="שגיאה פנימית בשרת")
+
