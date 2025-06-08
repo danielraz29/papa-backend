@@ -88,9 +88,12 @@ def update_status(payload: Dict):
 
 @router.get("/api/export-meetings/{mentor_id}")
 def export_meetings(mentor_id: str):
+    from bson.errors import InvalidId
+
     try:
         print(f"📤 ייצוא מפגשים עבור mentorId: {mentor_id}")
 
+        # המרה ל־ObjectId
         try:
             mentor_obj_id = ObjectId(mentor_id)
         except InvalidId:
@@ -100,30 +103,38 @@ def export_meetings(mentor_id: str):
         if not mentor:
             raise HTTPException(status_code=404, detail="החונך לא נמצא")
 
-        mentor_name = mentor.get("fullName", "חונך לא ידוע")
-        meetings_list = list(meetings.find({"mentorId": mentor_obj_id}))
+        mentor_name = mentor.get("fullName", "חונך ללא שם")
 
+        # שליפת כל המפגשים
+        meetings_list = list(meetings.find({"mentorId": mentor_obj_id}))
         if not meetings_list:
             raise HTTPException(status_code=404, detail="לא נמצאו מפגשים לחונך זה")
 
         data = []
         for meeting in meetings_list:
-            mentee = users.find_one({"_id": meeting.get("menteeId")})
+            mentee_id = meeting.get("menteeId")
+            mentee_name = "חניך לא ידוע"
+
+            if mentee_id and ObjectId.is_valid(str(mentee_id)):
+                mentee = users.find_one({"_id": ObjectId(mentee_id)})
+                if mentee:
+                    mentee_name = mentee.get("fullName", "חניך ללא שם")
+
             data.append({
                 "שם חונך": mentor_name,
-                "שם חניך": mentee.get("fullName", "") if mentee else "לא ידוע",
+                "שם חניך": mentee_name,
                 "נושא": meeting.get("summary", ""),
-                "תיאור": meeting.get("description", ""),
-                "תאריך התחלה": meeting.get("startDateTime"),
-                "תאריך סיום": meeting.get("endDateTime"),
-                "סטטוס מפגש": meeting.get("status", "לא צויין")
+                "תיאור": meeting.get("description") or "",  # טיפול ב-null
+                "תאריך התחלה": str(meeting.get("startDateTime") or ""),
+                "תאריך סיום": str(meeting.get("endDateTime") or ""),
+                "סטטוס מפגש": meeting.get("status", "")
             })
 
         df = pd.DataFrame(data)
-        filename = f"מפגשים_{mentor_name.replace(' ', '_')}.xlsx"
+        filename = f"meetings_{mentor_id}.xlsx"
         df.to_excel(filename, index=False)
 
-        print(f"✅ נוצר קובץ: {filename}")
+        print(f"✅ נוצר הקובץ: {filename}")
         return FileResponse(
             path=filename,
             filename=filename,
@@ -131,5 +142,5 @@ def export_meetings(mentor_id: str):
         )
 
     except Exception as e:
-        print(f"❌ שגיאה בייצוא: {str(e)}")
+        print(f"❌ שגיאה כללית: {str(e)}")
         raise HTTPException(status_code=500, detail="שגיאה פנימית בשרת")
