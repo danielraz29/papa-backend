@@ -1,10 +1,13 @@
 from fastapi import APIRouter, HTTPException
-from db import users
+from db import users, meetings
 from typing import Dict
 import random
 import string
 from utils.email_util import send_email  # נשלח בהמשך
 from bson import ObjectId
+from io import BytesIO
+from fastapi.responses import StreamingResponse
+import pandas as pd
 
 router = APIRouter()
 
@@ -80,3 +83,44 @@ def update_status(payload: Dict):
                 print("❌ שגיאה בשליחת מייל:", str(e))
 
     return {"message": "הסטטוס עודכן בהצלחה"}
+
+@router.post("/api/meetings-by-mentor")
+def export_meetings_by_mentor(payload: Dict):
+    user_name = payload.get("userName")
+    if not user_name:
+        raise HTTPException(status_code=400, detail="userName is required")
+
+    mentor = users.find_one({"userName": user_name})
+    if not mentor:
+        raise HTTPException(status_code=404, detail="Mentor not found")
+
+    mentor_id = mentor["_id"]
+    full_name = mentor.get("fullName", "")
+
+    results = list(meetings.find({"mentorId": mentor_id}))
+    if not results:
+        raise HTTPException(status_code=404, detail="No meetings found")
+
+    data = []
+    for m in results:
+        mentee = users.find_one({"_id": m["menteeId"]})
+        data.append({
+            "נושא": m.get("summary", ""),
+            "שם חונך": full_name,
+            "שם חניך": mentee.get("fullName", "") if mentee else "לא נמצא",
+            "תאריך התחלה": m.get("startDateTime"),
+            "תאריך סיום": m.get("endDateTime"),
+            "סטטוס": m.get("status", "לא ידוע")
+        })
+
+    df = pd.DataFrame(data)
+    output = BytesIO()
+    with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
+        df.to_excel(writer, index=False, sheet_name="מפגשים")
+    output.seek(0)
+
+    return StreamingResponse(
+        output,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f"attachment; filename=meetings_{user_name}.xlsx"}
+    )
