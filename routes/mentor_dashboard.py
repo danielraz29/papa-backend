@@ -77,6 +77,37 @@ def create_meeting(meeting: dict):
     return meeting
 
 
+@router.put("/api/meetings/{meeting_id}")
+def update_meeting(meeting_id: str, meeting: dict):
+    if not ObjectId.is_valid(meeting_id):
+        raise HTTPException(status_code=400, detail="Invalid meeting ID")
+
+    try:
+        meeting["startDateTime"] = datetime.fromisoformat(meeting["startDateTime"])
+        meeting["endDateTime"] = datetime.fromisoformat(meeting["endDateTime"])
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid date format")
+
+    if not ObjectId.is_valid(meeting["mentorId"]) or not ObjectId.is_valid(meeting["menteeId"]):
+        raise HTTPException(status_code=400, detail="Invalid ObjectId")
+
+    meeting["mentorId"] = ObjectId(meeting["mentorId"])
+    meeting["menteeId"] = ObjectId(meeting["menteeId"])
+
+    result = meetings.update_one(
+        {"_id": ObjectId(meeting_id)},
+        {"$set": meeting}
+    )
+
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Meeting not found")
+
+    meeting["_id"] = meeting_id
+    meeting["mentorId"] = str(meeting["mentorId"])
+    meeting["menteeId"] = str(meeting["menteeId"])
+    return meeting
+
+
 @router.get("/api/mentor-name")
 def get_mentor_name(userId: str):
     if not ObjectId.is_valid(userId):
