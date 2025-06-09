@@ -54,7 +54,7 @@ def get_mentees_by_mentor(userId: str):
 
 @router.post("/api/meetings")
 def create_meeting(meeting: dict):
-    required_fields = ["mentorId", "menteeId", "summary", "startDateTime", "endDateTime"]
+    required_fields = ["mentorId", "menteeId", "summary", "description", "status", "startDateTime", "endDateTime"]
     if not all(field in meeting for field in required_fields):
         raise HTTPException(status_code=400, detail="Missing fields")
 
@@ -71,6 +71,8 @@ def create_meeting(meeting: dict):
     meeting["menteeId"] = ObjectId(meeting["menteeId"])
 
     result = meetings.insert_one(meeting)
+
+    # Serialize before return
     meeting["_id"] = str(result.inserted_id)
     meeting["mentorId"] = str(meeting["mentorId"])
     meeting["menteeId"] = str(meeting["menteeId"])
@@ -81,6 +83,10 @@ def create_meeting(meeting: dict):
 def update_meeting(meeting_id: str, meeting: dict):
     if not ObjectId.is_valid(meeting_id):
         raise HTTPException(status_code=400, detail="Invalid meeting ID")
+
+    required_fields = ["mentorId", "menteeId", "summary", "description", "status", "startDateTime", "endDateTime"]
+    if not all(field in meeting for field in required_fields):
+        raise HTTPException(status_code=400, detail="Missing fields")
 
     try:
         meeting["startDateTime"] = datetime.fromisoformat(meeting["startDateTime"])
@@ -102,6 +108,7 @@ def update_meeting(meeting_id: str, meeting: dict):
     if result.matched_count == 0:
         raise HTTPException(status_code=404, detail="Meeting not found")
 
+    # Prepare return object
     meeting["_id"] = meeting_id
     meeting["mentorId"] = str(meeting["mentorId"])
     meeting["menteeId"] = str(meeting["menteeId"])
