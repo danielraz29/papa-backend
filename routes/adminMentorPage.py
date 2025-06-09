@@ -88,8 +88,6 @@ def update_status(payload: Dict):
 
 @router.get("/api/export-meetings/{mentor_id}")
 def export_meetings(mentor_id: str):
-    from bson.errors import InvalidId
-
     try:
         print(f"📤 ייצוא מפגשים עבור mentorId: {mentor_id}")
 
@@ -112,8 +110,8 @@ def export_meetings(mentor_id: str):
 
         data = []
         for meeting in meetings_list:
-            mentee_id = meeting.get("menteeId")
             mentee_name = "חניך לא ידוע"
+            mentee_id = meeting.get("menteeId")
 
             if mentee_id and ObjectId.is_valid(str(mentee_id)):
                 mentee = users.find_one({"_id": ObjectId(mentee_id)})
@@ -123,24 +121,24 @@ def export_meetings(mentor_id: str):
             data.append({
                 "שם חונך": mentor_name,
                 "שם חניך": mentee_name,
-                "נושא": meeting.get("summary", ""),
-                "תיאור": meeting.get("description") or "",  # טיפול ב-null
+                "נושא": meeting.get("summary") or "",
+                "תיאור": meeting.get("description") or "",
                 "תאריך התחלה": str(meeting.get("startDateTime") or ""),
                 "תאריך סיום": str(meeting.get("endDateTime") or ""),
-                "סטטוס מפגש": meeting.get("status", "")
+                "סטטוס מפגש": meeting.get("status") or ""
             })
 
         df = pd.DataFrame(data)
-        filename = f"meetings_{mentor_id}.xlsx"
+        filename = f"/tmp/meetings_{mentor_id}.xlsx"
         df.to_excel(filename, index=False)
 
-        print(f"✅ נוצר הקובץ: {filename}")
+        print(f"✅ נוצר הקובץ בהצלחה: {filename}")
         return FileResponse(
             path=filename,
-            filename=filename,
-            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            filename=os.path.basename(filename),
+            media_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
         )
 
     except Exception as e:
-        print(f"❌ שגיאה כללית: {str(e)}")
+        print(f"❌ שגיאה ביצוא מפגשים: {str(e)}")
         raise HTTPException(status_code=500, detail="שגיאה פנימית בשרת")
