@@ -37,9 +37,12 @@ def get_mentees_by_mentor(userId: str):
     if not mentor:
         raise HTTPException(status_code=404, detail="Mentor not found")
 
-    result = list(requests.find({"mentorId": mentor["_id"]}))
-    enriched = []
+    result = list(requests.find({
+        "mentorId": mentor["_id"],
+        "status": "in progress"
+    }))
 
+    enriched = []
     for r in result:
         mentee = users.find_one({"_id": r["menteeId"]})
         if mentee:
@@ -54,6 +57,7 @@ def get_mentees_by_mentor(userId: str):
             })
 
     return enriched
+
 
 @router.post("/api/meetings")
 def create_meeting(meeting: dict):
