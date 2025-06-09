@@ -8,9 +8,9 @@ from fastapi.responses import FileResponse
 import pandas as pd
 import random
 import string
+import os
 
 router = APIRouter()
-
 
 def generate_password():
     letters = ''.join(random.choices(string.ascii_uppercase, k=4))
@@ -91,54 +91,70 @@ def export_meetings(mentor_id: str):
     try:
         print(f"📤 ייצוא מפגשים עבור mentorId: {mentor_id}")
 
-        # המרה ל־ObjectId
         try:
             mentor_obj_id = ObjectId(mentor_id)
         except InvalidId:
+            print("❌ ObjectId לא תקף")
             raise HTTPException(status_code=400, detail="ID של החונך לא תקין")
 
         mentor = users.find_one({"_id": mentor_obj_id})
         if not mentor:
+            print("❌ חונך לא נמצא")
             raise HTTPException(status_code=404, detail="החונך לא נמצא")
 
         mentor_name = mentor.get("fullName", "חונך ללא שם")
 
-        # שליפת כל המפגשים
         meetings_list = list(meetings.find({"mentorId": mentor_obj_id}))
+        print(f"🔍 נמצאו {len(meetings_list)} מפגשים")
+
         if not meetings_list:
             raise HTTPException(status_code=404, detail="לא נמצאו מפגשים לחונך זה")
 
         data = []
-        for meeting in meetings_list:
-            mentee_name = "חניך לא ידוע"
-            mentee_id = meeting.get("menteeId")
+        for i, meeting in enumerate(meetings_list):
+            try:
+                mentee_name = "חניך לא ידוע"
+                mentee_id = meeting.get("menteeId")
 
-            if mentee_id and ObjectId.is_valid(str(mentee_id)):
-                mentee = users.find_one({"_id": ObjectId(mentee_id)})
-                if mentee:
-                    mentee_name = mentee.get("fullName", "חניך ללא שם")
+                if mentee_id and ObjectId.is_valid(str(mentee_id)):
+                    mentee = users.find_one({"_id": ObjectId(mentee_id)})
+                    if mentee:
+                        mentee_name = mentee.get("fullName", "חניך ללא שם")
+                else:
+                    print(f"⚠️ menteeId לא תקף במפגש {i}: {mentee_id}")
 
-            data.append({
-                "שם חונך": mentor_name,
-                "שם חניך": mentee_name,
-                "נושא": meeting.get("summary") or "",
-                "תיאור": meeting.get("description") or "",
-                "תאריך התחלה": str(meeting.get("startDateTime") or ""),
-                "תאריך סיום": str(meeting.get("endDateTime") or ""),
-                "סטטוס מפגש": meeting.get("status") or ""
-            })
+                data.append({
+                    "שם חונך": mentor_name,
+                    "שם חניך": mentee_name,
+                    "נושא": meeting.get("summary", ""),
+                    "תיאור": meeting.get("description") or "",
+                    "תאריך התחלה": str(meeting.get("startDateTime") or ""),
+                    "תאריך סיום": str(meeting.get("endDateTime") or ""),
+                    "סטטוס מפגש": meeting.get("status") or ""
+                })
+            except Exception as inner_e:
+                print(f"❌ שגיאה בעיבוד מפגש מס׳ {i}: {inner_e}")
 
+        print("📊 יצירת DataFrame עם הנתונים")
         df = pd.DataFrame(data)
+
         filename = f"/tmp/meetings_{mentor_id}.xlsx"
         df.to_excel(filename, index=False)
 
-        print(f"✅ נוצר הקובץ בהצלחה: {filename}")
+        if not os.path.exists(filename):
+            print("❌ הקובץ לא נוצר בפועל")
+            raise HTTPException(status_code=500, detail="הקובץ לא נוצר כראוי")
+
+        print(f"✅ הקובץ מוכן ונשלח: {filename}")
         return FileResponse(
             path=filename,
             filename=os.path.basename(filename),
-            media_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
 
+    except HTTPException as http_err:
+        raise http_err
+
     except Exception as e:
-        print(f"❌ שגיאה ביצוא מפגשים: {str(e)}")
-        raise HTTPException(status_code=500, detail="שגיאה פנימית בשרת")
+        print(f"❌ שגיאה כללית ביצוא מפגשים: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"שגיאה פנימית בשרת: {str(e)}")
