@@ -59,23 +59,31 @@ def create_meeting(meeting: dict):
         raise HTTPException(status_code=400, detail="Missing fields")
 
     try:
-        meeting["startDateTime"] = datetime.fromisoformat(meeting["startDateTime"])
-        meeting["endDateTime"] = datetime.fromisoformat(meeting["endDateTime"])
+        start_dt = datetime.fromisoformat(meeting["startDateTime"].replace("Z", "+00:00"))
+        end_dt = datetime.fromisoformat(meeting["endDateTime"].replace("Z", "+00:00"))
+        duration_hours = int((end_dt - start_dt).total_seconds() // 3600)
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid date format")
 
     if not ObjectId.is_valid(meeting["mentorId"]) or not ObjectId.is_valid(meeting["menteeId"]):
         raise HTTPException(status_code=400, detail="Invalid ObjectId")
 
-    meeting["mentorId"] = ObjectId(meeting["mentorId"])
-    meeting["menteeId"] = ObjectId(meeting["menteeId"])
+    mentor_id = ObjectId(meeting["mentorId"])
+    mentee_id = ObjectId(meeting["menteeId"])
+
+    if meeting["status"] == "done":
+        users.update_one({"_id": mentor_id}, {"$inc": {"menteeHourQuota": -duration_hours}})
+
+    meeting["startDateTime"] = start_dt
+    meeting["endDateTime"] = end_dt
+    meeting["mentorId"] = mentor_id
+    meeting["menteeId"] = mentee_id
 
     result = meetings.insert_one(meeting)
 
-    # Serialize before return
     meeting["_id"] = str(result.inserted_id)
-    meeting["mentorId"] = str(meeting["mentorId"])
-    meeting["menteeId"] = str(meeting["menteeId"])
+    meeting["mentorId"] = str(mentor_id)
+    meeting["menteeId"] = str(mentee_id)
     return meeting
 
 
@@ -89,29 +97,44 @@ def update_meeting(meeting_id: str, meeting: dict):
         raise HTTPException(status_code=400, detail="Missing fields")
 
     try:
-        meeting["startDateTime"] = datetime.fromisoformat(meeting["startDateTime"])
-        meeting["endDateTime"] = datetime.fromisoformat(meeting["endDateTime"])
+        start_dt = datetime.fromisoformat(meeting["startDateTime"].replace("Z", "+00:00"))
+        end_dt = datetime.fromisoformat(meeting["endDateTime"].replace("Z", "+00:00"))
+        duration_hours = int((end_dt - start_dt).total_seconds() // 3600)
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid date format")
 
     if not ObjectId.is_valid(meeting["mentorId"]) or not ObjectId.is_valid(meeting["menteeId"]):
         raise HTTPException(status_code=400, detail="Invalid ObjectId")
 
-    meeting["mentorId"] = ObjectId(meeting["mentorId"])
-    meeting["menteeId"] = ObjectId(meeting["menteeId"])
+    mentor_id = ObjectId(meeting["mentorId"])
+    mentee_id = ObjectId(meeting["menteeId"])
 
-    result = meetings.update_one(
+    existing = meetings.find_one({"_id": ObjectId(meeting_id)})
+    if not existing:
+        raise HTTPException(status_code=404, detail="Meeting not found")
+
+    prev_status = existing.get("status")
+    new_status = meeting["status"]
+
+    if prev_status != new_status:
+        if new_status == "done":
+            users.update_one({"_id": mentor_id}, {"$inc": {"menteeHourQuota": -duration_hours}})
+        elif prev_status == "done" and new_status in ["open", "cancel"]:
+            users.update_one({"_id": mentor_id}, {"$inc": {"menteeHourQuota": duration_hours}})
+
+    meeting["startDateTime"] = start_dt
+    meeting["endDateTime"] = end_dt
+    meeting["mentorId"] = mentor_id
+    meeting["menteeId"] = mentee_id
+
+    meetings.update_one(
         {"_id": ObjectId(meeting_id)},
         {"$set": meeting}
     )
 
-    if result.matched_count == 0:
-        raise HTTPException(status_code=404, detail="Meeting not found")
-
-    # Prepare return object
     meeting["_id"] = meeting_id
-    meeting["mentorId"] = str(meeting["mentorId"])
-    meeting["menteeId"] = str(meeting["menteeId"])
+    meeting["mentorId"] = str(mentor_id)
+    meeting["menteeId"] = str(mentee_id)
     return meeting
 
 
