@@ -5,6 +5,11 @@ from db import meetings, requests, users
 
 router = APIRouter()
 
+def convert_mentee_quota_to_float(user_id: ObjectId):
+    user = users.find_one({"_id": user_id})
+    if user and isinstance(user.get("menteeHourQuota"), int):
+        users.update_one({"_id": user_id}, {"$set": {"menteeHourQuota": float(user["menteeHourQuota"])}})
+
 @router.get("/api/mentor-meetings")
 def get_meetings_by_mentor(userId: str):
     if not ObjectId.is_valid(userId):
@@ -22,7 +27,6 @@ def get_meetings_by_mentor(userId: str):
         if "matchId" in m:
             m["matchId"] = str(m["matchId"])
     return result
-
 
 @router.get("/api/mentor-assigned")
 def get_mentees_by_mentor(userId: str):
@@ -51,7 +55,6 @@ def get_mentees_by_mentor(userId: str):
 
     return enriched
 
-
 @router.post("/api/meetings")
 def create_meeting(meeting: dict):
     required_fields = ["mentorId", "menteeId", "summary", "description", "status", "startDateTime", "endDateTime"]
@@ -61,7 +64,7 @@ def create_meeting(meeting: dict):
     try:
         start_dt = datetime.fromisoformat(meeting["startDateTime"].replace("Z", "+00:00"))
         end_dt = datetime.fromisoformat(meeting["endDateTime"].replace("Z", "+00:00"))
-        duration_hours = int((end_dt - start_dt).total_seconds() // 3600)
+        duration_hours = round((end_dt - start_dt).total_seconds() / 3600, 2)
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid date format")
 
@@ -72,7 +75,8 @@ def create_meeting(meeting: dict):
     mentee_id = ObjectId(meeting["menteeId"])
 
     if meeting["status"] == "done":
-        users.update_one({"_id": mentor_id}, {"$inc": {"menteeHourQuota": -duration_hours}})
+        convert_mentee_quota_to_float(mentee_id)
+        users.update_one({"_id": mentee_id}, {"$inc": {"menteeHourQuota": -duration_hours}})
 
     meeting["startDateTime"] = start_dt
     meeting["endDateTime"] = end_dt
@@ -86,7 +90,6 @@ def create_meeting(meeting: dict):
     meeting["menteeId"] = str(mentee_id)
     return meeting
 
-
 @router.put("/api/meetings/{meeting_id}")
 def update_meeting(meeting_id: str, meeting: dict):
     if not ObjectId.is_valid(meeting_id):
@@ -99,7 +102,7 @@ def update_meeting(meeting_id: str, meeting: dict):
     try:
         start_dt = datetime.fromisoformat(meeting["startDateTime"].replace("Z", "+00:00"))
         end_dt = datetime.fromisoformat(meeting["endDateTime"].replace("Z", "+00:00"))
-        duration_hours = int((end_dt - start_dt).total_seconds() // 3600)
+        duration_hours = round((end_dt - start_dt).total_seconds() / 3600, 2)
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid date format")
 
@@ -117,10 +120,11 @@ def update_meeting(meeting_id: str, meeting: dict):
     new_status = meeting["status"]
 
     if prev_status != new_status:
+        convert_mentee_quota_to_float(mentee_id)
         if new_status == "done":
-            users.update_one({"_id": mentor_id}, {"$inc": {"menteeHourQuota": -duration_hours}})
+            users.update_one({"_id": mentee_id}, {"$inc": {"menteeHourQuota": -duration_hours}})
         elif prev_status == "done" and new_status in ["open", "cancel"]:
-            users.update_one({"_id": mentor_id}, {"$inc": {"menteeHourQuota": duration_hours}})
+            users.update_one({"_id": mentee_id}, {"$inc": {"menteeHourQuota": duration_hours}})
 
     meeting["startDateTime"] = start_dt
     meeting["endDateTime"] = end_dt
@@ -137,7 +141,6 @@ def update_meeting(meeting_id: str, meeting: dict):
     meeting["menteeId"] = str(mentee_id)
     return meeting
 
-
 @router.get("/api/mentor-name")
 def get_mentor_name(userId: str):
     if not ObjectId.is_valid(userId):
@@ -146,7 +149,6 @@ def get_mentor_name(userId: str):
     if not mentor:
         raise HTTPException(status_code=404, detail="Mentor not found")
     return {"fullName": mentor.get("fullName", "")}
-
 
 @router.delete("/api/meetings/{meeting_id}")
 def delete_meeting(meeting_id: str):
